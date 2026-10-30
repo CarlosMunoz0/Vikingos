@@ -1,0 +1,144 @@
+﻿@page "/"
+@inject VikingoState Estado
+@implements IDisposable
+
+<PageTitle>Vikingos</PageTitle>
+
+@if (Estado.Error is not null)
+{
+    <p class="alert" role="alert">@Estado.Error</p>
+}
+
+<aside class="panel rules">
+    <h2>Cómo se calculan los puntos</h2>
+    <p class="rules-formula">Puntos = batallas ganadas × 10 + extra por honor</p>
+    <ul class="rules-honor">
+        <li><span>Honor bajo</span><strong>+ 0</strong></li>
+        <li><span>Honor medio</span><strong>+ 40</strong></li>
+        <li><span>Honor alto</span><strong>+ 80</strong></li>
+    </ul>
+    <p class="rules-example">Ejemplo: 55 batallas y honor alto se calculan así: 55 × 10 = 550, más 80 = 630 puntos.</p>
+</aside>
+
+<section class="layout">
+    <div class="panel">
+        <h2>Lista</h2>
+
+        @if (Estado.Cargando && Estado.Vikingos.Count == 0)
+        {
+            <p>Cargando vikingos...</p>
+        }
+        else if (Estado.Vikingos.Count == 0)
+        {
+            <p>Todavía no hay vikingos. Usa el formulario para registrar el primero.</p>
+        }
+        else
+        {
+            @if (Estado.PendienteDeBorrar is VikingoResponse pendiente)
+            {
+                <p class="confirm" role="status">
+                    ¿Eliminar a @pendiente.Nombre?
+                    <button type="button" @onclick="ConfirmarEliminacion" disabled="@Estado.Cargando">Eliminar</button>
+                    <button type="button" class="secondary" @onclick="Estado.CancelarEliminacion" disabled="@Estado.Cargando">Cancelar</button>
+                </p>
+            }
+
+            <ul class="roster">
+                @foreach (var vikingo in Estado.Vikingos)
+                {
+                    <li>
+                        <div class="roster-head">
+                            <strong>@vikingo.Nombre</strong>
+                            <span class="badge">@Etiquetas.Categoria(vikingo.Categoria)</span>
+                        </div>
+                        <p class="roster-meta">
+                            @vikingo.BatallasGanadas batallas · @Etiquetas.Arma(vikingo.ArmaFavorita) · Honor @Etiquetas.Honor(vikingo.NivelHonor).ToLower() · @Etiquetas.Causa(vikingo.CausaMuerte) · @vikingo.ValhallaPoints puntos
+                        </p>
+                        @if (vikingo.ListoParaElBanquete)
+                        {
+                            <p class="banquete">@Etiquetas.Banquete</p>
+                        }
+                        <div class="actions">
+                            <button type="button" @onclick="() => Estado.ComenzarEdicion(vikingo)" disabled="@Estado.Cargando">Editar</button>
+                            <button type="button" class="danger" @onclick="() => Estado.PedirEliminacion(vikingo.Id)" disabled="@Estado.Cargando">Eliminar</button>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <div class="panel">
+        <h2>@(Estado.IdEnEdicion is null ? "Nuevo vikingo" : "Editar vikingo")</h2>
+        <EditForm Model="Estado.Formulario" OnValidSubmit="Guardar" @key="Estado.FormularioToken">
+            <DataAnnotationsValidator />
+            <div class="field">
+                <label for="nombre">Nombre</label>
+                <InputText id="nombre" @bind-Value="Estado.Formulario.Nombre" maxlength="80" />
+                <ValidationMessage For="() => Estado.Formulario.Nombre" />
+            </div>
+            <div class="field">
+                <label for="batallas">Batallas ganadas</label>
+                <InputNumber id="batallas" @bind-Value="Estado.Formulario.BatallasGanadas" />
+                <ValidationMessage For="() => Estado.Formulario.BatallasGanadas" />
+            </div>
+            <div class="field">
+                <label for="arma">Arma favorita</label>
+                <InputSelect id="arma" TValue="string" @bind-Value="Estado.Formulario.ArmaFavorita">
+                    <option value="">Elige un arma</option>
+                    @foreach (var arma in Enum.GetValues<ArmaFavorita>())
+                    {
+                        <option value="@arma">@Etiquetas.Arma(arma)</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => Estado.Formulario.ArmaFavorita" />
+            </div>
+            <div class="field">
+                <label for="honor">Nivel de honor</label>
+                <InputSelect id="honor" TValue="string" @bind-Value="Estado.Formulario.NivelHonor">
+                    <option value="">Elige el nivel</option>
+                    @foreach (var honor in Enum.GetValues<NivelHonor>())
+                    {
+                        <option value="@honor">@Etiquetas.Honor(honor)</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => Estado.Formulario.NivelHonor" />
+            </div>
+            <div class="field">
+                <label for="causa">Causa de muerte gloriosa</label>
+                <InputSelect id="causa" TValue="string" @bind-Value="Estado.Formulario.CausaMuerte">
+                    <option value="">Elige la causa</option>
+                    @foreach (var causa in Enum.GetValues<CausaMuerte>())
+                    {
+                        <option value="@causa">@Etiquetas.Causa(causa)</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => Estado.Formulario.CausaMuerte" />
+            </div>
+            <div class="form-actions">
+                <button type="submit" disabled="@Estado.Cargando">Guardar</button>
+                @if (Estado.IdEnEdicion is not null)
+                {
+                    <button type="button" class="secondary" @onclick="Estado.CancelarEdicion" disabled="@Estado.Cargando">Cancelar</button>
+                }
+            </div>
+        </EditForm>
+    </div>
+</section>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Estado.OnChange += StateHasChanged;
+        await Estado.CargarAsync();
+    }
+
+    private Task Guardar() => Estado.GuardarAsync();
+
+    private Task ConfirmarEliminacion() => Estado.ConfirmarEliminacionAsync();
+
+    public void Dispose()
+    {
+        Estado.OnChange -= StateHasChanged;
+    }
+}
